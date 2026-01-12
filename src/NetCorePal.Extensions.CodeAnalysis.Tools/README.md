@@ -13,6 +13,13 @@
 
 ## 快速开始
 
+### 前提条件
+
+- **需要 .NET 10 SDK**（单文件执行依赖 .NET 10 特性）
+- 目标项目可使用 `net8.0` / `net9.0` / `net10.0` 作为目标框架进行分析
+- 目标项目必须引用 `NetCorePal.Extensions.CodeAnalysis` 包
+- 该包包含源生成器，在编译时自动生成代码分析元数据
+
 ### 安装
 
 ```bash
@@ -79,12 +86,6 @@ netcorepal-codeanalysis generate --project A.csproj --project B.csproj
 ```bash
 netcorepal-codeanalysis generate --include-tests
 ```
-
-## 前提条件
-
-- .NET 8.0 或更高版本（推荐 .NET 10.0 以获得最佳性能）
-- 目标项目必须引用 `NetCorePal.Extensions.CodeAnalysis` 包
-- 该包包含源生成器，在编译时自动生成代码分析元数据
 
 ## 工作原理
 

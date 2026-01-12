@@ -519,6 +519,11 @@ public class Program
                 if (excluded > 0)
                     Console.WriteLine($"Excluded {excluded} test project(s) by default.");
             }
+            Console.WriteLine($"Projects to analyze ({filtered.Count}):");
+            foreach (var projectPath in filtered)
+            {
+                Console.WriteLine($"  {Path.GetFileName(projectPath)}");
+            }
             projectsToAnalyze.AddRange(filtered);
             return;
         }
@@ -537,6 +542,11 @@ public class Program
                 var excluded = projectPaths.Count - filtered.Count;
                 if (excluded > 0)
                     Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+            }
+            Console.WriteLine($"Projects to analyze ({filtered.Count}):");
+            foreach (var projectPath in filtered)
+            {
+                Console.WriteLine($"  {Path.GetFileName(projectPath)}");
             }
             projectsToAnalyze.AddRange(filtered);
             return;
