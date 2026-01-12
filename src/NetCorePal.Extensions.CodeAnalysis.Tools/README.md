@@ -51,9 +51,9 @@ netcorepal-codeanalysis generate --verbose
 
 - 默认策略：当未提供 `--solution` 与 `--project` 时，工具会在“当前目录（顶层）”自动发现分析目标。
 - 发现优先级：
-	1) 优先使用 `.slnx`
-	2) 其次使用 `.sln`
-	3) 若无解决方案文件，则收集当前目录顶层的 `*.csproj`
+  1) 优先使用 `.slnx`
+  2) 其次使用 `.sln`
+  3) 若无解决方案文件，则收集当前目录顶层的 `*.csproj`
 - 非递归：不递归扫描子目录，仅检查当前目录的顶层文件。
 - 运行时提示：选择 `.slnx/.sln` 时将明确打印“Using solution (.slnx/.sln): <文件名>”。
 
@@ -65,6 +65,19 @@ netcorepal-codeanalysis generate --solution MySolution.slnx
 
 # 或指定若干项目
 netcorepal-codeanalysis generate --project A.csproj --project B.csproj
+```
+
+### 测试项目识别规则
+
+- 默认行为：测试项目会被排除在分析之外（除非显式传入 `--include-tests`）。
+- 判定规则（满足任一即视为测试项目）：
+  - 项目文件所在路径的任一父级目录名为 `test` 或 `tests`（不区分大小写）。
+  - 项目文件（.csproj）中包含 `<IsTestProject>true</IsTestProject>`。
+
+若需包含测试项目，请使用：
+
+```bash
+netcorepal-codeanalysis generate --include-tests
 ```
 
 ## 前提条件

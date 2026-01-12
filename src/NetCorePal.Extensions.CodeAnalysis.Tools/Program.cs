@@ -114,18 +114,27 @@ public class Program
 
         // removed --framework option
 
+        var includeTestsOption = new Option<bool>(
+            name: "--include-tests",
+            description: "Include test projects when analyzing (default: false)")
+        {
+            IsRequired = false
+        };
+        // no short alias to avoid ambiguity
+
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);
         generateCommand.AddOption(outputOption);
         generateCommand.AddOption(titleOption);
         generateCommand.AddOption(verboseOption);
+        generateCommand.AddOption(includeTestsOption);
         
 
         generateCommand.SetHandler(
-            async (solution, projects, output, title, verbose) =>
+            async (solution, projects, output, title, verbose, includeTests) =>
             {
-                await GenerateVisualization(solution, projects, output, title, verbose);
-            }, solutionOption, projectOption, outputOption, titleOption, verboseOption);
+                await GenerateVisualization(solution, projects, output, title, verbose, includeTests);
+            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption);
 
         rootCommand.AddCommand(generateCommand);
 
@@ -133,7 +142,7 @@ public class Program
     }
 
     private static async Task GenerateVisualization(FileInfo? solutionFile, FileInfo[]? projectFiles,
-        FileInfo outputFile, string title, bool verbose)
+        FileInfo outputFile, string title, bool verbose, bool includeTests)
     {
         try
         {
@@ -142,6 +151,7 @@ public class Program
                 Console.WriteLine($"NetCorePal Code Analysis Tool v{GetVersion()}");
                 Console.WriteLine($"Output file: {outputFile.FullName}");
                 Console.WriteLine($"Title: {title}");
+                Console.WriteLine($"Include tests: {includeTests}");
                 Console.WriteLine();
             }
 
@@ -160,6 +170,12 @@ public class Program
                     {
                         Console.Error.WriteLine($"Error: Project file not found: {projectFile.FullName}");
                         Environment.Exit(1);
+                    }
+                    if (!includeTests && IsTestProject(projectFile.FullName))
+                    {
+                        if (verbose)
+                            Console.WriteLine($"  Skipping test project: {projectFile.FullName}");
+                        continue;
                     }
                     projectsToAnalyze.Add(projectFile.FullName);
                     if (verbose)
@@ -180,7 +196,14 @@ public class Program
 
                 var solutionDir = Path.GetDirectoryName(solutionFile.FullName)!;
                 var projectPaths = GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
-                projectsToAnalyze.AddRange(projectPaths);
+                var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
+                if (!includeTests && verbose)
+                {
+                    var excluded = projectPaths.Count - filtered.Count;
+                    if (excluded > 0)
+                        Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+                }
+                projectsToAnalyze.AddRange(filtered);
 
                 if (verbose)
                 {
@@ -197,7 +220,7 @@ public class Program
                 if (verbose)
                     Console.WriteLine("Auto-discovering solution or projects in current directory...");
 
-                await AutoDiscoverProjects(projectsToAnalyze, verbose);
+                await AutoDiscoverProjects(projectsToAnalyze, verbose, includeTests);
             }
 
             if (projectsToAnalyze.Count == 0)
@@ -211,7 +234,7 @@ public class Program
             var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var projectPath in projectsToAnalyze)
             {
-                CollectProjectDependencies(projectPath, allProjects, verbose);
+                CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
             }
 
             if (verbose)
@@ -386,11 +409,18 @@ public class Program
         }
     }
 
-    private static void CollectProjectDependencies(string projectPath, HashSet<string> collectedProjects, bool verbose)
+    private static void CollectProjectDependencies(string projectPath, HashSet<string> collectedProjects, bool verbose, bool includeTests)
     {
         // Avoid circular dependencies
         if (collectedProjects.Contains(projectPath))
         {
+            return;
+        }
+
+        if (!includeTests && IsTestProject(projectPath))
+        {
+            if (verbose)
+                Console.WriteLine($"  Skipping test project dependency: {Path.GetFileName(projectPath)}");
             return;
         }
 
@@ -416,7 +446,7 @@ public class Program
 
             if (File.Exists(depProjectFile))
             {
-                CollectProjectDependencies(depProjectFile, collectedProjects, verbose);
+                CollectProjectDependencies(depProjectFile, collectedProjects, verbose, includeTests);
             }
             else if (verbose)
             {
@@ -425,7 +455,51 @@ public class Program
         }
     }
 
-    private static async Task AutoDiscoverProjects(List<string> projectsToAnalyze, bool verbose)
+    private static bool IsTestProject(string projectFilePath)
+    {
+        try
+        {
+            // Rule 1: project in a directory named "test" or "tests" (any level)
+            var dir = Path.GetDirectoryName(projectFilePath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                var di = new DirectoryInfo(dir);
+                while (di != null)
+                {
+                    var name = di.Name;
+                    if (name.Equals("test", StringComparison.OrdinalIgnoreCase) ||
+                        name.Equals("tests", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                    di = di.Parent;
+                }
+            }
+
+            // Rule 2: csproj contains <IsTestProject>true</IsTestProject>
+            if (File.Exists(projectFilePath))
+            {
+                var doc = XDocument.Load(projectFilePath);
+                var props = doc.Descendants("PropertyGroup");
+                foreach (var pg in props)
+                {
+                    var isTestValue = pg.Element("IsTestProject")?.Value?.Trim();
+                    if (!string.IsNullOrEmpty(isTestValue) && isTestValue.Equals("true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // best-effort heuristic; ignore parsing errors
+        }
+
+        return false;
+    }
+
+    private static async Task AutoDiscoverProjects(List<string> projectsToAnalyze, bool verbose, bool includeTests)
     {
         var currentDir = Directory.GetCurrentDirectory();
 
@@ -438,7 +512,14 @@ public class Program
 
             var solutionDir = Path.GetDirectoryName(solutionFile)!;
             var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
-            projectsToAnalyze.AddRange(projectPaths);
+            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
+            if (!includeTests && verbose)
+            {
+                var excluded = projectPaths.Count - filtered.Count;
+                if (excluded > 0)
+                    Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+            }
+            projectsToAnalyze.AddRange(filtered);
             return;
         }
 
@@ -450,7 +531,14 @@ public class Program
 
             var solutionDir = Path.GetDirectoryName(solutionFile)!;
             var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
-            projectsToAnalyze.AddRange(projectPaths);
+            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
+            if (!includeTests && verbose)
+            {
+                var excluded = projectPaths.Count - filtered.Count;
+                if (excluded > 0)
+                    Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+            }
+            projectsToAnalyze.AddRange(filtered);
             return;
         }
 
@@ -458,9 +546,10 @@ public class Program
         var projectFiles = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
         if (projectFiles.Length > 0)
         {
-            Console.WriteLine($"Using projects ({projectFiles.Length}):");
+            var filtered = includeTests ? projectFiles : projectFiles.Where(p => !IsTestProject(p)).ToArray();
+            Console.WriteLine($"Using projects ({filtered.Length}):");
 
-            foreach (var projectFile in projectFiles)
+            foreach (var projectFile in filtered)
             {
                 Console.WriteLine($"  {Path.GetFileName(projectFile)}");
                 projectsToAnalyze.Add(projectFile);
