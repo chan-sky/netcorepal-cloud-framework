@@ -10,6 +10,10 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <InternalsVisibleTo Include="NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests" />
+  </ItemGroup>
+  
+  <ItemGroup>
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
   

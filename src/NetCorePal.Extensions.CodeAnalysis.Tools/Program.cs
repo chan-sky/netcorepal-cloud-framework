@@ -6,9 +6,20 @@ using NetCorePal.Extensions.CodeAnalysis;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
+public interface IExitHandler
+{
+    void Exit(int exitCode);
+}
+
+public class EnvironmentExitHandler : IExitHandler
+{
+    public void Exit(int exitCode) => Environment.Exit(exitCode);
+}
+
 public class Program
 {
     private const int AnalysisTimeoutMinutes = 5;
+    internal static IExitHandler ExitHandler { get; set; } = new EnvironmentExitHandler();
     
     private static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title)
     {
@@ -171,9 +182,9 @@ public class Program
                     if (!projectFile.Exists)
                     {
                         Console.Error.WriteLine($"Error: Project file not found: {projectFile.FullName}");
-                        Environment.Exit(1);
+                        ExitHandler.Exit(1);
                     }
-                    if (!includeTests && IsTestProject(projectFile.FullName))
+                    if (!includeTests && IsTestProject(projectFile.FullName, verbose))
                     {
                         if (verbose)
                             Console.WriteLine($"  Skipping test project: {projectFile.FullName}");
@@ -190,7 +201,7 @@ public class Program
                 if (!solutionFile.Exists)
                 {
                     Console.Error.WriteLine($"Error: Solution file not found: {solutionFile.FullName}");
-                    Environment.Exit(1);
+                    ExitHandler.Exit(1);
                 }
 
                 if (verbose)
@@ -239,20 +250,33 @@ public class Program
             {
                 Console.Error.WriteLine(
                     "Error: No projects found to analyze. Please specify --solution or --project options.");
-                Environment.Exit(1);
+                ExitHandler.Exit(1);
             }
 
             // Get all project dependencies recursively
             var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int totalMissing = 0;
+            if (!verbose)
+            {
+                Console.WriteLine("Collecting project dependencies...");
+            }
             foreach (var projectPath in projectsToAnalyze)
             {
-                CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
+                totalMissing += CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
             }
 
             if (verbose)
             {
                 Console.WriteLine();
                 Console.WriteLine($"Total projects to analyze (including dependencies): {allProjects.Count}");
+                if (totalMissing > 0)
+                {
+                    Console.WriteLine($"⚠️  Warning: {totalMissing} project dependencies could not be found");
+                }
+            }
+            else if (totalMissing > 0)
+            {
+                Console.WriteLine($"⚠️  Warning: {totalMissing} project dependencies could not be found (use --verbose for details)");
             }
 
             // Generate app.cs file in an isolated temp folder to avoid inheriting cwd/global.json
@@ -302,7 +326,8 @@ public class Program
                 if (process == null)
                 {
                     Console.Error.WriteLine("Failed to start dotnet run process");
-                    Environment.Exit(1);
+                    ExitHandler.Exit(1);
+                    return; // Add return for null-safety analysis
                 }
 
                 var outputBuilder = new StringBuilder();
@@ -351,7 +376,7 @@ public class Program
                         var error = errorBuilder.ToString();
                         Console.Error.WriteLine($"Analysis failed with exit code {process.ExitCode}:");
                         Console.Error.WriteLine(error);
-                        Environment.Exit(1);
+                        ExitHandler.Exit(1);
                     }
 
                     if (verbose)
@@ -374,7 +399,7 @@ public class Program
                     {
                         Console.Error.WriteLine($"Failed to kill analysis process: {ex.Message}");
                     }
-                    Environment.Exit(1);
+                    ExitHandler.Exit(1);
                 }
 
                 // Check if output file was created
@@ -391,7 +416,7 @@ public class Program
                 else
                 {
                     Console.Error.WriteLine($"Error: Output file was not created: {absoluteOutputPath}");
-                    Environment.Exit(1);
+                    ExitHandler.Exit(1);
                 }
             }
             finally
@@ -421,23 +446,25 @@ public class Program
                 Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
             }
 
-            Environment.Exit(1);
+            ExitHandler.Exit(1);
         }
     }
 
-    private static void CollectProjectDependencies(string projectPath, HashSet<string> collectedProjects, bool verbose, bool includeTests)
+    private static int CollectProjectDependencies(string projectPath, HashSet<string> collectedProjects, bool verbose, bool includeTests)
     {
+        int missingCount = 0;
+        
         // Avoid circular dependencies
         if (collectedProjects.Contains(projectPath))
         {
-            return;
+            return missingCount;
         }
 
-        if (!includeTests && IsTestProject(projectPath))
+        if (!includeTests && IsTestProject(projectPath, verbose))
         {
             if (verbose)
                 Console.WriteLine($"  Skipping test project dependency: {Path.GetFileName(projectPath)}");
-            return;
+            return missingCount;
         }
 
         collectedProjects.Add(projectPath);
@@ -462,16 +489,22 @@ public class Program
 
             if (File.Exists(depProjectFile))
             {
-                CollectProjectDependencies(depProjectFile, collectedProjects, verbose, includeTests);
+                missingCount += CollectProjectDependencies(depProjectFile, collectedProjects, verbose, includeTests);
             }
-            else if (verbose)
+            else
             {
-                Console.WriteLine($"    Warning: Dependency project not found: {depProjectFile}");
+                missingCount++;
+                if (verbose)
+                {
+                    Console.WriteLine($"    Warning: Dependency project not found: {depProjectFile}");
+                }
             }
         }
+        
+        return missingCount;
     }
 
-    private static bool IsTestProject(string projectFilePath)
+    private static bool IsTestProject(string projectFilePath, bool verbose = false)
     {
         try
         {
@@ -507,8 +540,12 @@ public class Program
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            if (verbose)
+            {
+                Console.WriteLine($"    Warning: Failed to check if {Path.GetFileName(projectFilePath)} is a test project: {ex.Message}");
+            }
             // best-effort heuristic; ignore parsing errors
         }
 

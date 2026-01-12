@@ -149,15 +149,48 @@ public class ProgramTests
     }
 
     [Fact]
-    public void Main_GenerateCommand_WithNonExistentProject_Fails()
+    public async Task Main_GenerateCommand_WithNonExistentProject_CallsExit()
     {
         // Arrange
         var nonExistentPath = Path.Combine(Path.GetTempPath(), "non-existent.csproj");
+        var exitCalled = false;
+        var exitCode = 0;
+        
+        var mockExitHandler = new MockExitHandler(code => {
+            exitCalled = true;
+            exitCode = code;
+        });
+        
+        var originalHandler = Program.ExitHandler;
+        Program.ExitHandler = mockExitHandler;
+        
+        try
+        {
+            var args = new[] { "generate", "--project", nonExistentPath, "--output", _tempOutputPath };
 
-        // Act & Assert
-        // The tool will call Environment.Exit(1) which we cannot catch in tests
-        // So we just verify that the project file doesn't exist
-        Assert.False(File.Exists(nonExistentPath), "Non-existent project should not exist");
+            // Act
+            await Program.Main(args);
+
+            // Assert
+            Assert.True(exitCalled, "Exit should have been called");
+            Assert.Equal(1, exitCode);
+        }
+        finally
+        {
+            Program.ExitHandler = originalHandler;
+        }
+    }
+
+    private class MockExitHandler : IExitHandler
+    {
+        private readonly Action<int> _onExit;
+        
+        public MockExitHandler(Action<int> onExit)
+        {
+            _onExit = onExit;
+        }
+        
+        public void Exit(int exitCode) => _onExit(exitCode);
     }
 
         [Fact]
@@ -234,7 +267,7 @@ public class ProgramTests
         {
                 var method = typeof(Program).GetMethod("IsTestProject", BindingFlags.NonPublic | BindingFlags.Static);
                 Assert.NotNull(method);
-                var result = method!.Invoke(null, new object[] { projectPath });
+                var result = method!.Invoke(null, new object[] { projectPath, false }); // Pass verbose=false
                 return Assert.IsType<bool>(result);
         }
 }
