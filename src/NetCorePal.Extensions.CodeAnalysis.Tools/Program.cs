@@ -320,7 +320,7 @@ public class Program
                     }
                 });
 
-                var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(AnalysisTimeoutMinutes));
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(AnalysisTimeoutMinutes));
 
                 try
                 {
