@@ -47,6 +47,26 @@ netcorepal-codeanalysis generate --output my-architecture.html --title "我的�
 netcorepal-codeanalysis generate --verbose
 ```
 
+### 自动发现行为
+
+- 默认策略：当未提供 `--solution` 与 `--project` 时，工具会在“当前目录（顶层）”自动发现分析目标。
+- 发现优先级：
+	1) 优先使用 `.slnx`
+	2) 其次使用 `.sln`
+	3) 若无解决方案文件，则收集当前目录顶层的 `*.csproj`
+- 非递归：不递归扫描子目录，仅检查当前目录的顶层文件。
+- 运行时提示：选择 `.slnx/.sln` 时将明确打印“Using solution (.slnx/.sln): <文件名>”。
+
+如需显式指定，推荐：
+
+```bash
+# 指定解决方案
+netcorepal-codeanalysis generate --solution MySolution.slnx
+
+# 或指定若干项目
+netcorepal-codeanalysis generate --project A.csproj --project B.csproj
+```
+
 ## 前提条件
 
 - .NET 8.0 或更高版本（推荐 .NET 10.0 以获得最佳性能）
@@ -86,3 +106,12 @@ netcorepal-codeanalysis generate --verbose
 
 - [`NetCorePal.Extensions.CodeAnalysis`](../NetCorePal.Extensions.CodeAnalysis/)：核心分析框架
 - [`NetCorePal.Extensions.CodeAnalysis.SourceGenerators`](../NetCorePal.Extensions.CodeAnalysis.SourceGenerators/)：用于自动分析的源生成器
+
+## 本地开发
+
+```bash
+cd src/NetCorePal.Extensions.CodeAnalysis.Tools
+dotnet pack -o .
+dotnet tool uninstall -g NetCorePal.Extensions.CodeAnalysis.Tools
+dotnet tool install -g NetCorePal.Extensions.CodeAnalysis.Tools --add-source .
+```

@@ -84,14 +84,7 @@ public class Program
         };
         projectOption.AddAlias("-p");
 
-        var configurationOption = new Option<string>(
-            name: "--configuration",
-            description: "Build configuration")
-        {
-            IsRequired = false
-        };
-        configurationOption.AddAlias("-c");
-        configurationOption.SetDefaultValue("Debug");
+        // removed --configuration option
 
         var outputOption = new Option<FileInfo>(
             name: "--output",
@@ -119,28 +112,20 @@ public class Program
         };
         verboseOption.AddAlias("-v");
 
-        var frameworkOption = new Option<string>(
-            name: "--framework",
-            description: "Target framework to analyze (when project has multiple frameworks)")
-        {
-            IsRequired = false
-        };
-        frameworkOption.AddAlias("-f");
+        // removed --framework option
 
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);
-        generateCommand.AddOption(configurationOption);
         generateCommand.AddOption(outputOption);
         generateCommand.AddOption(titleOption);
         generateCommand.AddOption(verboseOption);
-        generateCommand.AddOption(frameworkOption);
+        
 
         generateCommand.SetHandler(
-            async (solution, projects, configuration, output, title, verbose, framework) =>
+            async (solution, projects, output, title, verbose) =>
             {
-                await GenerateVisualization(solution, projects, configuration, output, title, verbose, framework);
-            }, solutionOption, projectOption, configurationOption, outputOption, titleOption,
-            verboseOption, frameworkOption);
+                await GenerateVisualization(solution, projects, output, title, verbose);
+            }, solutionOption, projectOption, outputOption, titleOption, verboseOption);
 
         rootCommand.AddCommand(generateCommand);
 
@@ -148,7 +133,7 @@ public class Program
     }
 
     private static async Task GenerateVisualization(FileInfo? solutionFile, FileInfo[]? projectFiles,
-        string configuration, FileInfo outputFile, string title, bool verbose, string? framework)
+        FileInfo outputFile, string title, bool verbose)
     {
         try
         {
@@ -157,7 +142,6 @@ public class Program
                 Console.WriteLine($"NetCorePal Code Analysis Tool v{GetVersion()}");
                 Console.WriteLine($"Output file: {outputFile.FullName}");
                 Console.WriteLine($"Title: {title}");
-                Console.WriteLine($"Configuration: {configuration}");
                 Console.WriteLine();
             }
 
@@ -236,8 +220,10 @@ public class Program
                 Console.WriteLine($"Total projects to analyze (including dependencies): {allProjects.Count}");
             }
 
-            // Generate app.cs file
-            var tempAppCsPath = Path.Combine(Path.GetTempPath(), $"netcorepal-analysis-{Guid.NewGuid():N}.cs");
+            // Generate app.cs file in an isolated temp folder to avoid inheriting cwd/global.json
+            var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-analysis-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tempWorkDir);
+            var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             var absoluteOutputPath = Path.GetFullPath(outputFile.FullName);
             var appCsContent = GenerateAppCsContent(allProjects.ToList(), absoluteOutputPath, title);
 
@@ -256,14 +242,21 @@ public class Program
 
             try
             {
-                // Run dotnet run app.cs
+                Console.WriteLine("Starting analysis...");
+                // Run dotnet run app.cs in an isolated temp directory to avoid project launchSettings/global.json in cwd
+                var workingDir = tempWorkDir;
+                var runArgs = $"run {tempAppCsPath} --no-launch-profile";
                 if (verbose)
-                    Console.WriteLine($"Executing: dotnet run {tempAppCsPath}");
+                {
+                    Console.WriteLine($"Executing: dotnet {runArgs}");
+                    Console.WriteLine($"WorkingDirectory: {workingDir}");
+                }
 
                 var processStartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"run \"{tempAppCsPath}\"",
+                    Arguments = runArgs,
+                    WorkingDirectory = workingDir,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -367,17 +360,17 @@ public class Program
                 // Clean up temporary app.cs file
                 try
                 {
-                    if (File.Exists(tempAppCsPath))
+                    if (Directory.Exists(tempWorkDir))
                     {
-                        File.Delete(tempAppCsPath);
+                        Directory.Delete(tempWorkDir, recursive: true);
                         if (verbose)
-                            Console.WriteLine($"Cleaned up temporary file: {tempAppCsPath}");
+                            Console.WriteLine($"Cleaned up temporary folder: {tempWorkDir}");
                     }
                 }
                 catch (Exception ex)
                 {
                     if (verbose)
-                        Console.WriteLine($"Warning: Failed to delete temporary file: {ex.Message}");
+                        Console.WriteLine($"Warning: Failed to delete temporary folder: {ex.Message}");
                 }
             }
         }
@@ -436,16 +429,24 @@ public class Program
     {
         var currentDir = Directory.GetCurrentDirectory();
 
-        // Look for solution files
-        var solutionFiles = Directory.GetFiles(currentDir, "*.sln", SearchOption.TopDirectoryOnly)
-            .Concat(Directory.GetFiles(currentDir, "*.slnx", SearchOption.TopDirectoryOnly))
-            .ToArray();
-
-        if (solutionFiles.Length > 0)
+        // Prefer .slnx first, then .sln (top directory only)
+        var slnxFiles = Directory.GetFiles(currentDir, "*.slnx", SearchOption.TopDirectoryOnly);
+        if (slnxFiles.Length > 0)
         {
-            var solutionFile = solutionFiles[0]; // Use first solution found
-            if (verbose)
-                Console.WriteLine($"  Found solution: {Path.GetFileName(solutionFile)}");
+            var solutionFile = slnxFiles[0];
+            Console.WriteLine($"Using solution (.slnx): {Path.GetFileName(solutionFile)}");
+
+            var solutionDir = Path.GetDirectoryName(solutionFile)!;
+            var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
+            projectsToAnalyze.AddRange(projectPaths);
+            return;
+        }
+
+        var slnFiles = Directory.GetFiles(currentDir, "*.sln", SearchOption.TopDirectoryOnly);
+        if (slnFiles.Length > 0)
+        {
+            var solutionFile = slnFiles[0];
+            Console.WriteLine($"Using solution (.sln): {Path.GetFileName(solutionFile)}");
 
             var solutionDir = Path.GetDirectoryName(solutionFile)!;
             var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
@@ -457,13 +458,11 @@ public class Program
         var projectFiles = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
         if (projectFiles.Length > 0)
         {
-            if (verbose)
-                Console.WriteLine($"  Found {projectFiles.Length} project(s):");
+            Console.WriteLine($"Using projects ({projectFiles.Length}):");
 
             foreach (var projectFile in projectFiles)
             {
-                if (verbose)
-                    Console.WriteLine($"    {Path.GetFileName(projectFile)}");
+                Console.WriteLine($"  {Path.GetFileName(projectFile)}");
                 projectsToAnalyze.Add(projectFile);
             }
 
