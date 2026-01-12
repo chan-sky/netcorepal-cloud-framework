@@ -153,7 +153,6 @@ public class ProgramTests
     {
         // Arrange
         var nonExistentPath = Path.Combine(Path.GetTempPath(), "non-existent.csproj");
-        var args = new[] { "generate", "--project", nonExistentPath, "--output", _tempOutputPath };
 
         // Act & Assert
         // The tool will call Environment.Exit(1) which we cannot catch in tests

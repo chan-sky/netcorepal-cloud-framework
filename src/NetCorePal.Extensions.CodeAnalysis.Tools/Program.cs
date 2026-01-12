@@ -53,8 +53,14 @@ public class Program
         sb.AppendLine();
         
         sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
-        sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, \"{title.Replace("\"", "\\\"")}\");");
-        sb.AppendLine($"File.WriteAllText(\"{outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"")}\", html);");
+        
+        // Use verbatim strings with proper escaping for title and outputPath
+        var escapedTitle = title.Replace("\"", "\"\"");
+        var normalizedOutputPath = Path.GetFullPath(outputPath);
+        var escapedOutputPath = normalizedOutputPath.Replace("\"", "\"\"");
+        
+        sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\");");
+        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", html);");
         
         return sb.ToString();
     }
@@ -84,8 +90,6 @@ public class Program
         };
         projectOption.AddAlias("-p");
 
-        // removed --configuration option
-
         var outputOption = new Option<FileInfo>(
             name: "--output",
             description: "Output HTML file path")
@@ -111,8 +115,6 @@ public class Program
             IsRequired = false
         };
         verboseOption.AddAlias("-v");
-
-        // removed --framework option
 
         var includeTestsOption = new Option<bool>(
             name: "--include-tests",
@@ -196,12 +198,22 @@ public class Program
 
                 var solutionDir = Path.GetDirectoryName(solutionFile.FullName)!;
                 var projectPaths = GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
-                var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
-                if (!includeTests && verbose)
+                
+                // Skip IsTestProject check entirely when includeTests is true
+                List<string> filtered;
+                if (includeTests)
                 {
-                    var excluded = projectPaths.Count - filtered.Count;
-                    if (excluded > 0)
-                        Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+                    filtered = projectPaths;
+                }
+                else
+                {
+                    filtered = projectPaths.Where(p => !IsTestProject(p)).ToList();
+                    if (verbose)
+                    {
+                        var excluded = projectPaths.Count - filtered.Count;
+                        if (excluded > 0)
+                            Console.WriteLine($"Excluded {excluded} test project(s) by default.");
+                    }
                 }
                 projectsToAnalyze.AddRange(filtered);
 
@@ -317,6 +329,10 @@ public class Program
                     while ((line = await reader.ReadLineAsync()) != null)
                     {
                         errorBuilder.AppendLine(line);
+                        if (verbose)
+                        {
+                            Console.Error.WriteLine(line);
+                        }
                     }
                 });
 
@@ -480,14 +496,14 @@ public class Program
             if (File.Exists(projectFilePath))
             {
                 var doc = XDocument.Load(projectFilePath);
-                var props = doc.Descendants("PropertyGroup");
-                foreach (var pg in props)
+                var isTestElements = doc.Descendants("PropertyGroup")
+                    .SelectMany(pg => pg.Elements("IsTestProject"))
+                    .Where(elem => !string.IsNullOrEmpty(elem.Value?.Trim()))
+                    .Select(elem => elem.Value.Trim());
+                
+                if (isTestElements.Any(value => value.Equals("true", StringComparison.OrdinalIgnoreCase)))
                 {
-                    var isTestValue = pg.Element("IsTestProject")?.Value?.Trim();
-                    if (!string.IsNullOrEmpty(isTestValue) && isTestValue.Equals("true", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
