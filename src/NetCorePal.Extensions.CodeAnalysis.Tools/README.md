@@ -1,13 +1,15 @@
 # NetCorePal.Extensions.CodeAnalysis.Tools
 
-基于 NetCorePal 代码分析框架的命令行工具，用于从 .NET 程序集生成交互式架构可视化 HTML 文件。
+基于 NetCorePal 代码分析框架的命令行工具，用于从 .NET 项目生成交互式架构可视化 HTML 文件。
 
 ## 功能特性
 
-- **智能发现**：自动发现并构建解决方案、项目或程序集
+- **智能发现**：自动发现并分析解决方案或项目
+- **依赖递归分析**：自动分析项目依赖关系，确保完整的架构视图
 - **多类型图表**：生成架构总览图、处理流程图、聚合关系图等
 - **交互式HTML**：提供完整的导航、图表切换和在线编辑功能
 - **Mermaid Live集成**：一键跳转到 Mermaid Live Editor 进行在线编辑
+- **.NET 10 单文件执行**：利用 .NET 10 的单文件运行能力，动态生成和执行分析代码
 
 ## 快速开始
 
@@ -29,21 +31,38 @@ dotnet tool install -g NetCorePal.Extensions.CodeAnalysis.Tools --prerelease  --
 # 进入项目目录
 cd MyApp
 
-# 自动发现并分析当前目录下的所有内容
+# 自动发现并分析当前目录下的解决方案或项目
 netcorepal-codeanalysis generate
 
 # 指定解决方案文件
 netcorepal-codeanalysis generate --solution MySolution.sln
 
+# 指定项目文件
+netcorepal-codeanalysis generate --project MyProject.csproj
+
 # 自定义输出和标题
 netcorepal-codeanalysis generate --output my-architecture.html --title "我的架构图"
+
+# 启用详细输出
+netcorepal-codeanalysis generate --verbose
 ```
 
 ## 前提条件
 
-- .NET 8.0 或更高版本
+- .NET 8.0 或更高版本（推荐 .NET 10.0 以获得最佳性能）
 - 目标项目必须引用 `NetCorePal.Extensions.CodeAnalysis` 包
 - 该包包含源生成器，在编译时自动生成代码分析元数据
+
+## 工作原理
+
+该工具采用基于 .NET 10 单文件执行能力的全新架构：
+
+1. **项目发现**：自动发现目标解决方案或项目文件
+2. **依赖分析**：递归分析项目引用，获取所有相关项目
+3. **动态代码生成**：生成包含 `#:project` 指令的临时 C# 文件
+4. **单文件执行**：使用 `dotnet run app.cs` 执行分析
+5. **结果生成**：生成交互式 HTML 可视化文件
+6. **自动清理**：删除临时文件
 
 ## 输出内容
 

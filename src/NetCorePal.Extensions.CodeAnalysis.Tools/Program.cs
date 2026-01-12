@@ -8,6 +8,8 @@ namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 public class Program
 {
+    private const int AnalysisTimeoutMinutes = 5;
+    
     private static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title)
     {
         var sb = new StringBuilder();
@@ -302,7 +304,7 @@ public class Program
                     }
                 });
 
-                var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(AnalysisTimeoutMinutes));
 
                 try
                 {
@@ -328,7 +330,7 @@ public class Program
                 }
                 catch (OperationCanceledException)
                 {
-                    Console.Error.WriteLine("Analysis process timed out after 5 minutes");
+                    Console.Error.WriteLine($"Analysis process timed out after {AnalysisTimeoutMinutes} minutes");
                     try
                     {
                         if (!process.HasExited)
