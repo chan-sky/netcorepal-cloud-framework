@@ -192,6 +192,4 @@ public class ProgramTests
         
         public void Exit(int exitCode) => _onExit(exitCode);
     }
-
-        
 }

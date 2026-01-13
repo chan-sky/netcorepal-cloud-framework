@@ -6,79 +6,88 @@ using System.Reflection;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests;
 
-public class ProjectAnalysisHelpersTests
+public class ProjectAnalysisHelpersTests : IDisposable
 {
+    private readonly string _tempRoot;
+
+    public ProjectAnalysisHelpersTests()
+    {
+        _tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempRoot);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempRoot))
+        {
+            try
+            {
+                Directory.Delete(_tempRoot, true);
+            }
+            catch (IOException)
+            {
+                // Ignore cleanup errors
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
     [Fact]
     public void IsTestProject_ReturnsTrue_WhenParentDirIsTests()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        var testsDir = Path.Combine(tempRoot, "tests");
+        var testsDir = Path.Combine(_tempRoot, "tests");
         Directory.CreateDirectory(testsDir);
         var csprojPath = Path.Combine(testsDir, "Sample.csproj");
         File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.True(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.True(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsTrue_WhenParentDirIsTests_DifferentCasing()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        var testsDir = Path.Combine(tempRoot, "TeStS");
+        var testsDir = Path.Combine(_tempRoot, "TeStS");
         Directory.CreateDirectory(testsDir);
         var csprojPath = Path.Combine(testsDir, "Sample.csproj");
         File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.True(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.True(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsTrue_WhenAncestorDirIsTests()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        var ancestorTestsDir = Path.Combine(tempRoot, "tests");
+        var ancestorTestsDir = Path.Combine(_tempRoot, "tests");
         var subDir = Path.Combine(ancestorTestsDir, "submodule");
         Directory.CreateDirectory(subDir);
         var csprojPath = Path.Combine(subDir, "Sample.csproj");
         File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.True(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.True(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsFalse_WhenDirNameIsTesting()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        var testingDir = Path.Combine(tempRoot, "testing");
+        var testingDir = Path.Combine(_tempRoot, "testing");
         Directory.CreateDirectory(testingDir);
         var csprojPath = Path.Combine(testingDir, "Sample.csproj");
         File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.False(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.False(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsTrue_WhenIsTestProjectFlagIsUppercaseAndSpaced()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempRoot);
-        var csprojPath = Path.Combine(tempRoot, "Sample.csproj");
+        var csprojPath = Path.Combine(_tempRoot, "Sample1.csproj");
         var content = """
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -89,20 +98,15 @@ public class ProjectAnalysisHelpersTests
 </Project>
 """;
         File.WriteAllText(csprojPath, content);
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.True(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.True(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsTrue_WhenIsTestProjectFlagIsSet()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempRoot);
-        var csprojPath = Path.Combine(tempRoot, "Sample.csproj");
+        var csprojPath = Path.Combine(_tempRoot, "Sample2.csproj");
         var content = """
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -112,20 +116,15 @@ public class ProjectAnalysisHelpersTests
 </Project>
 """;
         File.WriteAllText(csprojPath, content);
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.True(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.True(result);
     }
 
     [Fact]
     public void IsTestProject_ReturnsFalse_WhenNoTestMarkers()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempRoot);
-        var csprojPath = Path.Combine(tempRoot, "Sample.csproj");
+        var csprojPath = Path.Combine(_tempRoot, "Sample3.csproj");
         var content = """
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -134,12 +133,9 @@ public class ProjectAnalysisHelpersTests
 </Project>
 """;
         File.WriteAllText(csprojPath, content);
-        try
-        {
-            var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
-            Assert.False(result);
-        }
-        finally { Directory.Delete(tempRoot, true); }
+        
+        var result = ProjectAnalysisHelpers.IsTestProject(csprojPath);
+        Assert.False(result);
     }
 }
 

@@ -120,45 +120,45 @@ internal static class ProjectAnalysisHelpers
             {
                 // Parse XML-based solution file
                 var doc = XDocument.Load(solutionPath);
-                var projectElements = doc.Descendants("Project");
-
-                foreach (var projectElement in projectElements)
-                {
-                    var pathAttr = projectElement.Attribute("Path")?.Value;
-                    if (!string.IsNullOrEmpty(pathAttr))
+                
+                var paths = doc.Descendants("Project")
+                    .Select(projectElement => projectElement.Attribute("Path")?.Value)
+                    .Where(pathAttr => !string.IsNullOrEmpty(pathAttr))
+                    .Select(pathAttr =>
                     {
-                        var absolutePath = Path.IsPathRooted(pathAttr)
-                            ? pathAttr
-                            : Path.GetFullPath(Path.Combine(solutionDir, pathAttr.Replace('\\', Path.DirectorySeparatorChar)));
-
-                        if (File.Exists(absolutePath))
-                        {
-                            projectPaths.Add(absolutePath);
-                        }
-                    }
-                }
+                        var absolutePath = Path.IsPathRooted(pathAttr!)
+                            ? pathAttr!
+                            : Path.GetFullPath(Path.Combine(solutionDir, pathAttr!.Replace('\\', Path.DirectorySeparatorChar)));
+                        return absolutePath;
+                    })
+                    .Where(File.Exists);
+                
+                projectPaths.AddRange(paths);
             }
             else if (solutionPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
             {
                 // Parse traditional .sln
                 var lines = File.ReadAllLines(solutionPath);
 
-                foreach (var line in lines)
+                foreach (var line in lines.Where(line => line.StartsWith("Project(")))
                 {
-                    if (line.StartsWith("Project("))
+                    var lineParts = line.Split('=');
+                    if (lineParts.Length < 2)
                     {
-                        var parts = line.Split('=')[1].Split(',');
-                        if (parts.Length >= 2)
-                        {
-                            var projectPath = parts[1].Trim().Trim('"');
-                            var absolutePath = Path.IsPathRooted(projectPath)
-                                ? projectPath
-                                : Path.GetFullPath(Path.Combine(solutionDir, projectPath.Replace('\\', Path.DirectorySeparatorChar)));
+                        continue; // Skip malformed lines without '='
+                    }
 
-                            if (File.Exists(absolutePath) && absolutePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-                            {
-                                projectPaths.Add(absolutePath);
-                            }
+                    var parts = lineParts[1].Split(',');
+                    if (parts.Length >= 2)
+                    {
+                        var projectPath = parts[1].Trim().Trim('"');
+                        var absolutePath = Path.IsPathRooted(projectPath)
+                            ? projectPath
+                            : Path.GetFullPath(Path.Combine(solutionDir, projectPath.Replace('\\', Path.DirectorySeparatorChar)));
+
+                        if (File.Exists(absolutePath) && absolutePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                        {
+                            projectPaths.Add(absolutePath);
                         }
                     }
                 }
@@ -190,16 +190,10 @@ internal static class ProjectAnalysisHelpers
         {
             var doc = XDocument.Load(projectFilePath);
 
-            var projectReferences = doc.Descendants("ProjectReference");
-
-            foreach (var reference in projectReferences)
-            {
-                var includePath = reference.Attribute("Include")?.Value?.Trim();
-                if (!string.IsNullOrEmpty(includePath))
-                {
-                    dependencies.Add(includePath);
-                }
-            }
+            dependencies.AddRange(
+                doc.Descendants("ProjectReference")
+                    .Select(reference => reference.Attribute("Include")?.Value?.Trim())
+                    .Where(includePath => !string.IsNullOrEmpty(includePath))!);
         }
         catch (Exception)
         {

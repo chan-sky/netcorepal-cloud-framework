@@ -195,8 +195,18 @@ public class Program
 
             if (projectsToAnalyze.Count == 0)
             {
-                Console.Error.WriteLine(
-                    "Error: No projects found to analyze. Please specify --solution or --project options.");
+                if (projectFiles?.Length > 0 || solutionFile != null)
+                {
+                    // Projects were specified but all were filtered out (likely test projects)
+                    Console.Error.WriteLine(
+                        "Error: No non-test projects found to analyze. Use --include-tests to analyze test projects, or specify different projects.");
+                }
+                else
+                {
+                    // No projects found via auto-discovery
+                    Console.Error.WriteLine(
+                        "Error: No projects found to analyze. Please specify --solution or --project options.");
+                }
                 ExitHandler.Exit(1);
             }
 
@@ -274,7 +284,9 @@ public class Program
                 {
                     Console.Error.WriteLine("Failed to start dotnet run process");
                     ExitHandler.Exit(1);
-                    return; // Add return for null-safety analysis
+                    // In production, EnvironmentExitHandler.Exit(1) terminates the process.
+                    // In tests, MockExitHandler does not exit, so this return prevents null-reference issues.
+                    return;
                 }
 
                 var outputBuilder = new StringBuilder();
