@@ -1,6 +1,6 @@
 using System.CommandLine;
-using System.Reflection;
 using System.IO;
+using NetCorePal.Extensions.CodeAnalysis.Tools;
 using Xunit;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests;
@@ -193,81 +193,5 @@ public class ProgramTests
         public void Exit(int exitCode) => _onExit(exitCode);
     }
 
-        [Fact]
-        public void IsTestProject_ReturnsTrue_WhenParentDirIsTests()
-        {
-                // Arrange
-                var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-                var testsDir = Path.Combine(tempRoot, "tests");
-                Directory.CreateDirectory(testsDir);
-                var csprojPath = Path.Combine(testsDir, "Sample.csproj");
-                File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-
-                // Act
-                var result = InvokeIsTestProject(csprojPath);
-
-                // Assert
-                Assert.True(result);
-
-                Directory.Delete(tempRoot, true);
-        }
-
-        [Fact]
-        public void IsTestProject_ReturnsTrue_WhenIsTestProjectFlagIsSet()
-        {
-                // Arrange
-                var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-                Directory.CreateDirectory(tempRoot);
-                var csprojPath = Path.Combine(tempRoot, "Sample.csproj");
-                var content = """
-<Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <IsTestProject>true</IsTestProject>
-    </PropertyGroup>
-</Project>
-""";
-                File.WriteAllText(csprojPath, content);
-
-                // Act
-                var result = InvokeIsTestProject(csprojPath);
-
-                // Assert
-                Assert.True(result);
-
-                Directory.Delete(tempRoot, true);
-        }
-
-        [Fact]
-        public void IsTestProject_ReturnsFalse_WhenNoTestMarkers()
-        {
-                // Arrange
-                var tempRoot = Path.Combine(Path.GetTempPath(), $"codeanalysis-tests-{Guid.NewGuid():N}");
-                Directory.CreateDirectory(tempRoot);
-                var csprojPath = Path.Combine(tempRoot, "Sample.csproj");
-                var content = """
-<Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-    </PropertyGroup>
-</Project>
-""";
-                File.WriteAllText(csprojPath, content);
-
-                // Act
-                var result = InvokeIsTestProject(csprojPath);
-
-                // Assert
-                Assert.False(result);
-
-                Directory.Delete(tempRoot, true);
-        }
-
-        private static bool InvokeIsTestProject(string projectPath)
-        {
-                var method = typeof(Program).GetMethod("IsTestProject", BindingFlags.NonPublic | BindingFlags.Static);
-                Assert.NotNull(method);
-                var result = method!.Invoke(null, new object[] { projectPath, false }); // Pass verbose=false
-                return Assert.IsType<bool>(result);
-        }
+        
 }

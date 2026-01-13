@@ -21,60 +21,7 @@ public class Program
     private const int AnalysisTimeoutMinutes = 5;
     internal static IExitHandler ExitHandler { get; set; } = new EnvironmentExitHandler();
     
-    private static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title)
-    {
-        var sb = new StringBuilder();
-        
-        // Add #:project directives for each project
-        foreach (var projectPath in projectPaths)
-        {
-            sb.AppendLine($"#:project {projectPath}");
-        }
-        
-        sb.AppendLine();
-        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
-        sb.AppendLine("using System.IO;");
-        sb.AppendLine("using System.Linq;");
-        sb.AppendLine("using System.Reflection;");
-        sb.AppendLine();
-        sb.AppendLine();
-        sb.AppendLine("var baseDir = AppDomain.CurrentDomain.BaseDirectory;");
-        
-        // Generate assembly names from project paths
-        var assemblyNames = projectPaths
-            .Select(p => Path.GetFileNameWithoutExtension(p) + ".dll")
-            .Distinct()
-            .ToList();
-        
-        sb.AppendLine("var assemblyNames = new[]");
-        sb.AppendLine("{");
-        foreach (var assemblyName in assemblyNames)
-        {
-            sb.AppendLine($"    \"{assemblyName}\",");
-        }
-        sb.AppendLine("};");
-        sb.AppendLine();
-        
-        sb.AppendLine("var assemblies = assemblyNames");
-        sb.AppendLine("    .Select(name => Path.Combine(baseDir, name))");
-        sb.AppendLine("    .Where(File.Exists)");
-        sb.AppendLine("    .Select(Assembly.LoadFrom)");
-        sb.AppendLine("    .Distinct()");
-        sb.AppendLine("    .ToArray();");
-        sb.AppendLine();
-        
-        sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
-        
-        // Use verbatim strings with proper escaping for title and outputPath
-        var escapedTitle = title.Replace("\"", "\"\"");
-        var normalizedOutputPath = Path.GetFullPath(outputPath);
-        var escapedOutputPath = normalizedOutputPath.Replace("\"", "\"\"");
-        
-        sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\");");
-        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", html);");
-        
-        return sb.ToString();
-    }
+    
 
     public static async Task<int> Main(string[] args)
     {
@@ -161,7 +108,7 @@ public class Program
         {
             if (verbose)
             {
-                Console.WriteLine($"NetCorePal Code Analysis Tool v{GetVersion()}");
+                Console.WriteLine($"NetCorePal Code Analysis Tool v{ProjectAnalysisHelpers.GetVersion()}");
                 Console.WriteLine($"Output file: {outputFile.FullName}");
                 Console.WriteLine($"Title: {title}");
                 Console.WriteLine($"Include tests: {includeTests}");
@@ -184,7 +131,7 @@ public class Program
                         Console.Error.WriteLine($"Error: Project file not found: {projectFile.FullName}");
                         ExitHandler.Exit(1);
                     }
-                    if (!includeTests && IsTestProject(projectFile.FullName, verbose))
+                    if (!includeTests && ProjectAnalysisHelpers.IsTestProject(projectFile.FullName, verbose))
                     {
                         if (verbose)
                             Console.WriteLine($"  Skipping test project: {projectFile.FullName}");
@@ -208,7 +155,7 @@ public class Program
                     Console.WriteLine($"Analyzing solution: {solutionFile.FullName}");
 
                 var solutionDir = Path.GetDirectoryName(solutionFile.FullName)!;
-                var projectPaths = GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
+                var projectPaths = ProjectAnalysisHelpers.GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
                 
                 // Skip IsTestProject check entirely when includeTests is true
                 List<string> filtered;
@@ -218,7 +165,7 @@ public class Program
                 }
                 else
                 {
-                    filtered = projectPaths.Where(p => !IsTestProject(p)).ToList();
+                    filtered = projectPaths.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToList();
                     if (verbose)
                     {
                         var excluded = projectPaths.Count - filtered.Count;
@@ -262,7 +209,7 @@ public class Program
             }
             foreach (var projectPath in projectsToAnalyze)
             {
-                totalMissing += CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
+                totalMissing += ProjectAnalysisHelpers.CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
             }
 
             if (verbose)
@@ -284,7 +231,7 @@ public class Program
             Directory.CreateDirectory(tempWorkDir);
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             var absoluteOutputPath = Path.GetFullPath(outputFile.FullName);
-            var appCsContent = GenerateAppCsContent(allProjects.ToList(), absoluteOutputPath, title);
+            var appCsContent = AppCsContentGenerator.GenerateAppCsContent(allProjects.ToList(), absoluteOutputPath, title);
 
             if (verbose)
             {
@@ -450,107 +397,9 @@ public class Program
         }
     }
 
-    private static int CollectProjectDependencies(string projectPath, HashSet<string> collectedProjects, bool verbose, bool includeTests)
-    {
-        int missingCount = 0;
-        
-        // Avoid circular dependencies
-        if (collectedProjects.Contains(projectPath))
-        {
-            return missingCount;
-        }
+    // Helpers moved to ProjectAnalysisHelpers
 
-        if (!includeTests && IsTestProject(projectPath, verbose))
-        {
-            if (verbose)
-                Console.WriteLine($"  Skipping test project dependency: {Path.GetFileName(projectPath)}");
-            return missingCount;
-        }
-
-        collectedProjects.Add(projectPath);
-
-        if (verbose)
-        {
-            Console.WriteLine($"  Collecting: {Path.GetFileName(projectPath)}");
-        }
-
-        // Get project dependencies
-        var dependencies = GetProjectDependencies(projectPath);
-        foreach (var depPath in dependencies)
-        {
-            // Normalize path separators
-            var normalizedDepPath = depPath.Replace('\\', Path.DirectorySeparatorChar);
-
-            // Resolve relative path
-            var projectDir = Path.GetDirectoryName(projectPath)!;
-            var depProjectFile = Path.IsPathRooted(normalizedDepPath)
-                ? normalizedDepPath
-                : Path.GetFullPath(Path.Combine(projectDir, normalizedDepPath));
-
-            if (File.Exists(depProjectFile))
-            {
-                missingCount += CollectProjectDependencies(depProjectFile, collectedProjects, verbose, includeTests);
-            }
-            else
-            {
-                missingCount++;
-                if (verbose)
-                {
-                    Console.WriteLine($"    Warning: Dependency project not found: {depProjectFile}");
-                }
-            }
-        }
-        
-        return missingCount;
-    }
-
-    private static bool IsTestProject(string projectFilePath, bool verbose = false)
-    {
-        try
-        {
-            // Rule 1: project in a directory named "test" or "tests" (any level)
-            var dir = Path.GetDirectoryName(projectFilePath);
-            if (!string.IsNullOrEmpty(dir))
-            {
-                var di = new DirectoryInfo(dir);
-                while (di != null)
-                {
-                    var name = di.Name;
-                    if (name.Equals("test", StringComparison.OrdinalIgnoreCase) ||
-                        name.Equals("tests", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                    di = di.Parent;
-                }
-            }
-
-            // Rule 2: csproj contains <IsTestProject>true</IsTestProject>
-            if (File.Exists(projectFilePath))
-            {
-                var doc = XDocument.Load(projectFilePath);
-                var isTestElements = doc.Descendants("PropertyGroup")
-                    .SelectMany(pg => pg.Elements("IsTestProject"))
-                    .Where(elem => !string.IsNullOrEmpty(elem.Value?.Trim()))
-                    .Select(elem => elem.Value.Trim());
-                
-                if (isTestElements.Any(value => value.Equals("true", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return true;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            if (verbose)
-            {
-                Console.WriteLine($"    Warning: Failed to check if {Path.GetFileName(projectFilePath)} is a test project: {ex.Message}");
-            }
-            // best-effort heuristic; ignore parsing errors
-        }
-
-        return false;
-    }
+    
 
     private static async Task AutoDiscoverProjects(List<string> projectsToAnalyze, bool verbose, bool includeTests)
     {
@@ -564,8 +413,8 @@ public class Program
             Console.WriteLine($"Using solution (.slnx): {Path.GetFileName(solutionFile)}");
 
             var solutionDir = Path.GetDirectoryName(solutionFile)!;
-            var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
-            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
+            var projectPaths = ProjectAnalysisHelpers.GetProjectPathsFromSolution(solutionFile, solutionDir);
+            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToList();
             if (!includeTests && verbose)
             {
                 var excluded = projectPaths.Count - filtered.Count;
@@ -588,8 +437,8 @@ public class Program
             Console.WriteLine($"Using solution (.sln): {Path.GetFileName(solutionFile)}");
 
             var solutionDir = Path.GetDirectoryName(solutionFile)!;
-            var projectPaths = GetProjectPathsFromSolution(solutionFile, solutionDir);
-            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !IsTestProject(p)).ToList();
+            var projectPaths = ProjectAnalysisHelpers.GetProjectPathsFromSolution(solutionFile, solutionDir);
+            var filtered = includeTests ? projectPaths : projectPaths.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToList();
             if (!includeTests && verbose)
             {
                 var excluded = projectPaths.Count - filtered.Count;
@@ -609,7 +458,7 @@ public class Program
         var projectFiles = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
         if (projectFiles.Length > 0)
         {
-            var filtered = includeTests ? projectFiles : projectFiles.Where(p => !IsTestProject(p)).ToArray();
+            var filtered = includeTests ? projectFiles : projectFiles.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToArray();
             Console.WriteLine($"Using projects ({filtered.Length}):");
 
             foreach (var projectFile in filtered)
@@ -625,114 +474,9 @@ public class Program
         Console.WriteLine("  No solution or project files found in current directory.");
     }
 
-    private static List<string> GetProjectPathsFromSolution(string solutionPath, string solutionDir)
-    {
-        var projectPaths = new List<string>();
-        
-        try
-        {
-            if (solutionPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
-            {
-                // 解析新的 XML 格式解决方案文件
-                var doc = XDocument.Load(solutionPath);
-                var projectElements = doc.Descendants("Project");
-                
-                foreach (var projectElement in projectElements)
-                {
-                    var pathAttr = projectElement.Attribute("Path")?.Value;
-                    if (!string.IsNullOrEmpty(pathAttr))
-                    {
-                        // 将相对路径转换为绝对路径
-                        var absolutePath = Path.IsPathRooted(pathAttr) 
-                            ? pathAttr 
-                            : Path.GetFullPath(Path.Combine(solutionDir, pathAttr.Replace('\\', Path.DirectorySeparatorChar)));
-                        
-                        if (File.Exists(absolutePath))
-                        {
-                            projectPaths.Add(absolutePath);
-                        }
-                    }
-                }
-            }
-            else if (solutionPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
-            {
-                // 解析传统的 .sln 格式文件
-                var lines = File.ReadAllLines(solutionPath);
-                
-                foreach (var line in lines)
-                {
-                    if (line.StartsWith("Project("))
-                    {
-                        // 解析项目行: Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProjectName", "src\ProjectName\ProjectName.csproj", "{GUID}"
-                        var parts = line.Split('=')[1].Split(',');
-                        if (parts.Length >= 2)
-                        {
-                            var projectPath = parts[1].Trim().Trim('"');
-                            var absolutePath = Path.IsPathRooted(projectPath) 
-                                ? projectPath 
-                                : Path.GetFullPath(Path.Combine(solutionDir, projectPath.Replace('\\', Path.DirectorySeparatorChar)));
-                            
-                            if (File.Exists(absolutePath) && absolutePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-                            {
-                                projectPaths.Add(absolutePath);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Warning: Failed to parse solution file {solutionPath}: {ex.Message}");
-            Console.Error.WriteLine("Falling back to directory scanning...");
-            
-            // 回退到目录扫描
-            var projectFiles = Directory.GetFiles(solutionDir, "*.csproj", SearchOption.AllDirectories);
-            projectPaths.AddRange(projectFiles);
-        }
-        
-        return projectPaths;
-    }
+    // Helpers moved to ProjectAnalysisHelpers
 
-    private static List<string> GetProjectDependencies(string projectFilePath)
-    {
-        var dependencies = new List<string>();
+    // Helpers moved to ProjectAnalysisHelpers
 
-        if (!File.Exists(projectFilePath))
-        {
-            return dependencies;
-        }
-
-        try
-        {
-            var doc = XDocument.Load(projectFilePath);
-
-            // 查找 ProjectReference 元素
-            var projectReferences = doc.Descendants("ProjectReference");
-
-            foreach (var reference in projectReferences)
-            {
-                var includePath = reference.Attribute("Include")?.Value?.Trim();
-                if (!string.IsNullOrEmpty(includePath))
-                {
-                    dependencies.Add(includePath);
-                }
-            }
-        }
-        catch (Exception)
-        {
-            // 如果解析失败，返回空列表
-        }
-
-        return dependencies;
-    }
-
-    private static string GetVersion()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-                      ?? assembly.GetName().Version?.ToString()
-                      ?? "1.0.0";
-        return version;
-    }
+    // Helpers moved to ProjectAnalysisHelpers
 }

@@ -17,9 +17,11 @@
 
 - **需要安装 .NET 10 SDK**：单文件执行依赖 .NET 10 特性
   - 可通过以下命令确认已安装 .NET 10 SDK：
+
     ```bash
     dotnet --list-sdks
     ```
+
     输出中需包含类似 `10.0.xxx` 的条目
   - 如果仅安装了 .NET 8/9 等较低版本，运行工具时可能会出现难以理解的错误信息
 - 目标项目可使用 `net8.0` / `net9.0` / `net10.0` 作为目标框架进行分析
@@ -134,4 +136,7 @@ cd src/NetCorePal.Extensions.CodeAnalysis.Tools
 dotnet pack -o .
 dotnet tool uninstall -g NetCorePal.Extensions.CodeAnalysis.Tools
 dotnet tool install -g NetCorePal.Extensions.CodeAnalysis.Tools --add-source .
+
+# test
+dotnet test test/NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests/NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests.csproj
 ```
