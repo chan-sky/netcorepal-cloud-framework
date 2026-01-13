@@ -1,16 +1,16 @@
 # Code Analysis Tools
 
-NetCorePal.Extensions.CodeAnalysis.Tools is a command-line tool based on the NetCorePal code analysis framework, used to generate architecture visualization HTML files from .NET assemblies.
+NetCorePal.Extensions.CodeAnalysis.Tools is a command-line tool based on the NetCorePal code analysis framework, used to generate interactive architecture visualization HTML files from .NET projects (powered by .NET 10 single-file execution).
 
 ## ⚠️ Important Notice
 
-**Prerequisites for the tool to work**: The target project/assembly to be analyzed must reference the `NetCorePal.Extensions.CodeAnalysis` package. This package contains source generators that automatically generate metadata required for code analysis during compilation.
+**Prerequisites for the tool to work**: The target project to be analyzed must reference the `NetCorePal.Extensions.CodeAnalysis` package. This package contains source generators that automatically generate metadata required for code analysis during compilation.
 
 ```xml
-<PackageReference Include="NetCorePal.Extensions.CodeAnalysis" Version="2.8.3" />
+<PackageReference Include="NetCorePal.Extensions.CodeAnalysis" />
 ```
 
-Assemblies without this package reference will not be able to generate analysis results.
+Projects without this package reference will not be able to generate analysis results.
 
 ## Installation
 
@@ -28,43 +28,42 @@ dotnet tool install NetCorePal.Extensions.CodeAnalysis.Tools
 
 ## Usage
 
-### Smart Discovery
-
-The tool supports automatic discovery of solutions, projects, or assemblies in the current directory:
+### Quick Start
 
 ```bash
-# Auto-discover and analyze all content in the current directory
+# Enter project directory
+cd MyApp
+
+# Auto-discover and analyze solution or projects in current directory
 netcorepal-codeanalysis generate
 
-# Specify solution file
+# Specify solution (.sln/.slnx)
 netcorepal-codeanalysis generate --solution MySolution.sln
 
-# Specify project file  
+# Specify project(s)
 netcorepal-codeanalysis generate --project MyProject.csproj
 
-# Specify assembly file
-netcorepal-codeanalysis generate --assembly MyApp.dll
+# Customize output and title
+netcorepal-codeanalysis generate --output my-architecture.html --title "My Architecture"
+
+# Enable verbose logs
+netcorepal-codeanalysis generate --verbose
 ```
 
-### Command Line Options
+### Command Parameters
+
+| Option | Alias | Type | Default | Description |
+|---|---|---|---|---|
+| `--solution <solution>` | `-s` | File path | N/A | Solution file to analyze, `.sln`/`.slnx` |
+| `--project <project>` | `-p` | File path (repeatable) | N/A | Project file(s) to analyze (`.csproj`) |
+| `--output <output>` | `-o` | File path | `architecture-visualization.html` | Output HTML file path |
+| `--title <title>` | `-t` | String | `架构可视化` | HTML page title |
+| `--verbose` | `-v` | Switch | `false` | Enable verbose output |
+| `--include-tests` | — | Switch | `false` | Include test projects (see rules below) |
 
 #### `generate` Command
 
-**Input Source Options (by priority):**
-
-- `--assembly, -a`: Specify assembly files (.dll). Can be specified multiple times
-- `--project, -p`: Specify project files (.csproj). Can be specified multiple times  
-- `--solution, -s`: Specify solution files (.sln). Can be specified multiple times
-
-**Build Options:**
-
-- `--configuration, -c`: Build configuration (Debug/Release). Default: Debug
-
-**Output Options:**
-
-- `--output, -o`: Output HTML file path. Default: code-analysis.html
-- `--title, -t`: HTML page title. Default: Architecture Visualization
-- `--verbose, -v`: Enable verbose output for debugging
+Use `generate` to analyze a solution or one or more projects and produce an interactive HTML report. Inputs can be provided by auto-discovery (top-level `.slnx/.sln/*.csproj`) or explicitly via `--solution`/`--project`. Options: see the parameter table above.
 
 ### Usage Examples
 
@@ -74,7 +73,7 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
    # Enter project directory
    cd MyApp
    
-   # Auto-discover solutions/projects/assemblies in current directory
+   # Auto-discover solution or projects in current directory
    netcorepal-codeanalysis generate
    
    # Auto-discover and specify output file
@@ -86,10 +85,9 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
    ```bash
    cd MyApp
    netcorepal-codeanalysis generate \
-       --solution MyApp.sln \
-       --configuration Release \
-       --output architecture.html \
-       --title "My Application Architecture"
+      --solution MyApp.sln \
+      --output architecture-visualization.html \
+      --title "My Application Architecture"
    ```
 
 3. **Analyze multiple projects:**
@@ -97,41 +95,38 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
    ```bash
    cd MyApp
    netcorepal-codeanalysis generate \
-       -p MyApp/MyApp.csproj \
-       -p MyApp.Domain/MyApp.Domain.csproj \
-       -c Release \
-       -o docs/architecture.html
+      -p MyApp/MyApp.csproj \
+      -p MyApp.Domain/MyApp.Domain.csproj \
+      -o docs/architecture-visualization.html
    ```
 
-4. **Direct assembly analysis:**
-
-   ```bash
-   cd MyApp
-   netcorepal-codeanalysis generate \
-       -a bin/Debug/net8.0/MyApp.dll \
-       -a bin/Debug/net8.0/MyApp.Domain.dll \
-       --verbose
-   ```
+   
 
 ## Auto-Discovery Mechanism
 
-The tool automatically discovers project content with the following priority:
+When `--solution` and `--project` are not provided, the tool auto-discovers targets in the current directory (top-level only):
 
-1. **Solution files**: Search for `*.sln` files
-2. **Project files**: Search for `*.csproj` files  
-3. **Assembly files**: Search for `*.dll` files in `bin/` directories
+- Priority: `.slnx` > `.sln` > top-level `*.csproj`
+- Non-recursive scan: only load top-level solution/project files in the current directory, then recursively analyze their dependent projects
+- Test projects are excluded by default (unless `--include-tests` is set)
+- Visibility:
+   - For `.slnx/.sln`, prints `Using solution (...): <file>` then prints `Projects to analyze (N)` listing the complete set including recursive dependencies
+   - For top-level `*.csproj`, directly prints `Projects to analyze (N)` listing the complete set including recursive dependencies
 
-Discovery rules:
+> Note: The tool generates and executes a dynamic `app.cs` in an isolated temporary work directory, and runs with `--no-launch-profile` to avoid inheriting `launchSettings.json`/`global.json` from the current directory.
 
-- Recursively search in current directory and subdirectories
-- Solutions take priority over projects, projects over assemblies
-- Automatically exclude test projects (containing "Test", "Tests")
-- Automatically build projects and load generated assemblies
+### Test Project Detection Rules
+
+- Default: test projects are excluded unless `--include-tests` is specified
+- A project is considered a test project if any of the following is true:
+   - Any ancestor directory name is `test` or `tests` (case-insensitive)
+   - The `.csproj` contains `<IsTestProject>true</IsTestProject>` (case/whitespace-insensitive)
 
 ## System Requirements
 
-- .NET 8.0 or higher
-- Assemblies must contain code analysis results generated by `NetCorePal.Extensions.CodeAnalysis` source generators
+- Runtime: .NET 10 SDK (single-file execution relies on .NET 10)
+- Target frameworks supported for analyzed projects: `net8.0`, `net9.0`, `net10.0`
+- Projects must reference the `NetCorePal.Extensions.CodeAnalysis` package (includes source generators)
 
 ## Output Content
 
@@ -152,8 +147,8 @@ Add to `.csproj` file:
 
 ```xml
 <Target Name="GenerateArchitectureVisualization" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
-  <Exec Command="netcorepal-codeanalysis generate -a $(OutputPath)$(AssemblyName).dll -o $(OutputPath)architecture.html" 
-        ContinueOnError="true" />
+   <Exec Command="netcorepal-codeanalysis generate --project $(MSBuildProjectFullPath) --output $(OutputPath)architecture-visualization.html" 
+            ContinueOnError="true" />
 </Target>
 ```
 
@@ -166,19 +161,19 @@ Add to workflow:
   run: |
     dotnet tool install -g NetCorePal.Extensions.CodeAnalysis.Tools
     cd MyApp
-    netcorepal-codeanalysis generate \
-      --output docs/architecture.html \
-      --title "MyApp Architecture"
+      netcorepal-codeanalysis generate \
+         --output docs/architecture-visualization.html \
+         --title "MyApp Architecture"
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Assembly not found**: Ensure assembly files exist and are accessible
-2. **No analysis results**: Ensure assemblies are built with `NetCorePal.Extensions.CodeAnalysis` package reference
-3. **Permission errors**: Check write permissions for output directory
-4. **Build failures**: Ensure projects can build normally, check dependencies
+1. **No projects discovered**: Ensure the current directory contains a `.slnx`, `.sln`, or top-level `*.csproj`, or pass `--solution/--project` explicitly
+2. **No analysis results**: Ensure analyzed projects reference `NetCorePal.Extensions.CodeAnalysis`
+3. **Build failures**: Ensure projects build successfully and dependencies restore correctly
+4. **Permission errors**: Verify write permission for the output directory
 
 ### Verbose Output
 
@@ -190,11 +185,11 @@ netcorepal-codeanalysis generate --verbose
 
 This will display:
 
-- Discovered files and projects
-- Build process information
-- Loaded assemblies
-- Analysis statistics
-- File generation details
+- Discovery details and chosen input (solution/projects)
+- Project filtering (tests excluded unless `--include-tests`)
+- Full recursive dependency list (Projects to analyze)
+- Temporary work directory and single-file execution details
+- Analysis statistics and output file path
 - Error details when issues occur
 
 ## Related Packages

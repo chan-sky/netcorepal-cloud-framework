@@ -16,14 +16,6 @@
 ### 前提条件
 
 - **需要安装 .NET 10 SDK**：单文件执行依赖 .NET 10 特性
-  - 可通过以下命令确认已安装 .NET 10 SDK：
-
-    ```bash
-    dotnet --list-sdks
-    ```
-
-    输出中需包含类似 `10.0.xxx` 的条目
-  - 如果仅安装了 .NET 8/9 等较低版本，运行工具时可能会出现难以理解的错误信息
 - **SDK 与目标框架的区别**：虽然工具需要 .NET 10 SDK 来运行，但它可以分析使用 `net8.0`、`net9.0` 或 `net10.0` 作为目标框架的项目
 - 目标项目必须引用 `NetCorePal.Extensions.CodeAnalysis` 包
 - 该包包含源生成器，在编译时自动生成代码分析元数据
@@ -61,6 +53,17 @@ netcorepal-codeanalysis generate --output my-architecture.html --title "我的�
 # 启用详细输出
 netcorepal-codeanalysis generate --verbose
 ```
+
+### 命令参数
+
+| 选项 | 别名 | 类型 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--solution <solution>` | `-s` | 文件路径 | 无 | 要分析的解决方案文件，支持 `.sln`/`.slnx` |
+| `--project <project>` | `-p` | 文件路径（可多次） | 无 | 要分析的项目文件（`.csproj`），可重复指定多个 |
+| `--output <output>` | `-o` | 文件路径 | `architecture-visualization.html` | 输出的 HTML 文件路径 |
+| `--title <title>` | `-t` | 字符串 | `架构可视化` | 生成页面的标题 |
+| `--verbose` | `-v` | 开关 | `false` | 启用详细日志输出 |
+| `--include-tests` | 无 | 开关 | `false` | 包含测试项目（默认不包含；规则见下文“测试项目识别规则”） |
 
 ### 自动发现行为
 
@@ -106,28 +109,12 @@ netcorepal-codeanalysis generate --include-tests
 5. **结果生成**：生成交互式 HTML 可视化文件
 6. **自动清理**：删除临时文件
 
-## 输出内容
-
-生成的HTML文件包含：
-
-- **统计信息**：各类型组件的数量统计和分布情况
-- **架构总览图**：系统中所有类型及其关系的完整视图
-- **处理流程图集合**：每个独立业务链路的流程图（如命令处理链路）
-- **聚合关系图集合**：每个聚合根相关的关系图
-- **交互式导航**：左侧树形菜单，支持图表类型切换
-- **在线编辑功能**：每个图表右上角的"View in Mermaid Live"按钮
-
 ## 完整文档
 
 详细的使用说明、命令行选项、集成方式和故障排除，请参阅：
 
 - [中文文档](https://netcorepal.github.io/netcorepal-cloud-framework/zh/code-analysis/code-analysis-tools/)
 - [English Documentation](https://netcorepal.github.io/netcorepal-cloud-framework/en/code-analysis/code-analysis-tools/)
-
-## 相关包
-
-- [`NetCorePal.Extensions.CodeAnalysis`](../NetCorePal.Extensions.CodeAnalysis/)：核心分析框架
-- [`NetCorePal.Extensions.CodeAnalysis.SourceGenerators`](../NetCorePal.Extensions.CodeAnalysis.SourceGenerators/)：用于自动分析的源生成器
 
 ## 本地开发
 
