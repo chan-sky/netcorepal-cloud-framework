@@ -433,12 +433,20 @@ public class Program
                 if (excluded > 0)
                     Console.WriteLine($"Excluded {excluded} test project(s) by default.");
             }
-            Console.WriteLine($"Projects to analyze ({filtered.Count}):");
-            foreach (var projectPath in filtered)
+
+            // Collect full dependency set for display
+            var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var proj in filtered)
             {
-                Console.WriteLine($"  {Path.GetFileName(projectPath)}");
+                ProjectAnalysisHelpers.CollectProjectDependencies(proj, allProjects, verbose, includeTests);
             }
-            projectsToAnalyze.AddRange(filtered);
+
+            Console.WriteLine($"Projects to analyze ({allProjects.Count}):");
+            foreach (var proj in allProjects)
+            {
+                Console.WriteLine($"  {Path.GetFileName(proj)}");
+            }
+            projectsToAnalyze.AddRange(allProjects);
             return;
         }
 
@@ -457,12 +465,20 @@ public class Program
                 if (excluded > 0)
                     Console.WriteLine($"Excluded {excluded} test project(s) by default.");
             }
-            Console.WriteLine($"Projects to analyze ({filtered.Count}):");
-            foreach (var projectPath in filtered)
+
+            // Collect full dependency set for display
+            var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var proj in filtered)
             {
-                Console.WriteLine($"  {Path.GetFileName(projectPath)}");
+                ProjectAnalysisHelpers.CollectProjectDependencies(proj, allProjects, verbose, includeTests);
             }
-            projectsToAnalyze.AddRange(filtered);
+
+            Console.WriteLine($"Projects to analyze ({allProjects.Count}):");
+            foreach (var proj in allProjects)
+            {
+                Console.WriteLine($"  {Path.GetFileName(proj)}");
+            }
+            projectsToAnalyze.AddRange(allProjects);
             return;
         }
 
@@ -471,13 +487,20 @@ public class Program
         if (projectFiles.Length > 0)
         {
             var filtered = includeTests ? projectFiles : projectFiles.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToArray();
-            Console.WriteLine($"Using projects ({filtered.Length}):");
 
+            // Collect recursive dependencies to display a complete list
+            var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var projectFile in filtered)
             {
-                Console.WriteLine($"  {Path.GetFileName(projectFile)}");
-                projectsToAnalyze.Add(projectFile);
+                ProjectAnalysisHelpers.CollectProjectDependencies(projectFile, allProjects, verbose, includeTests);
             }
+
+            Console.WriteLine($"Projects to analyze ({allProjects.Count}):");
+            foreach (var proj in allProjects)
+            {
+                Console.WriteLine($"  {Path.GetFileName(proj)}");
+            }
+            projectsToAnalyze.AddRange(allProjects);
 
             return;
         }
