@@ -1,16 +1,16 @@
 # 代码分析工具
 
-NetCorePal.Extensions.CodeAnalysis.Tools 是基于 NetCorePal 代码分析框架的命令行工具，用于从 .NET 程序集生成架构可视化 HTML 文件。
+NetCorePal.Extensions.CodeAnalysis.Tools 是基于 NetCorePal 代码分析框架的命令行工具，用于从 .NET 项目生成交互式架构可视化 HTML 文件（基于 .NET 10 单文件执行）。
 
 ## ⚠️ 重要说明
 
 **工具生效的前提条件**：目标分析的项目/程序集必须引用 `NetCorePal.Extensions.CodeAnalysis` 包。该包包含了源生成器，能够在编译时自动生成代码分析所需的元数据。
 
 ```xml
-<PackageReference Include="NetCorePal.Extensions.CodeAnalysis" Version="2.8.3" />
+<PackageReference Include="NetCorePal.Extensions.CodeAnalysis" />
 ```
 
-没有引用此包的程序集将无法生成分析结果。
+没有引用此包的项目将无法生成分析结果。
 
 ## 安装
 
@@ -28,25 +28,38 @@ dotnet tool install NetCorePal.Extensions.CodeAnalysis.Tools
 
 ## 使用方法
 
-### 智能发现
-
-工具支持自动发现当前目录下的解决方案、项目或程序集：
+### 快速上手
 
 ```bash
-# 自动发现并分析当前目录下的所有内容
+# 进入项目目录
+cd MyApp
+
+# 自动发现并分析当前目录下的解决方案或项目
 netcorepal-codeanalysis generate
 
-# 指定解决方案文件
+# 指定解决方案文件（.sln/.slnx）
 netcorepal-codeanalysis generate --solution MySolution.sln
 
-# 指定项目文件  
+# 指定项目文件（可多次指定）
 netcorepal-codeanalysis generate --project MyProject.csproj
 
-# 指定程序集文件
-netcorepal-codeanalysis generate --assembly MyApp.dll
+# 自定义输出文件和标题
+netcorepal-codeanalysis generate --output my-architecture.html --title "我的架构图"
+
+# 启用详细输出
+netcorepal-codeanalysis generate --verbose
 ```
 
-### 命令行选项
+### 命令参数
+
+| 选项 | 别名 | 类型 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `--solution <solution>` | `-s` | 文件路径 | 无 | 要分析的解决方案文件，支持 `.sln`/`.slnx` |
+| `--project <project>` | `-p` | 文件路径（可多次） | 无 | 要分析的项目文件（`.csproj`），可重复指定多个 |
+| `--output <output>` | `-o` | 文件路径 | `architecture-visualization.html` | 输出的 HTML 文件路径 |
+| `--title <title>` | `-t` | 字符串 | `架构可视化` | 生成页面的标题 |
+| `--verbose` | `-v` | 开关 | `false` | 启用详细日志输出 |
+| `--include-tests` | 无 | 开关 | `false` | 包含测试项目（默认不包含；规则见下文“测试项目识别规则”） |
 
 #### `generate` 命令
 
@@ -85,53 +98,49 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
 
    ```bash
    cd MyApp
-   netcorepal-codeanalysis generate \
-       --solution MyApp.sln \
-       --configuration Release \
-       --output architecture.html \
-       --title "我的应用架构"
+      netcorepal-codeanalysis generate \
+         --solution MyApp.sln \
+         --output architecture.html \
+         --title "我的应用架构"
    ```
 
 3. **分析多个项目：**
 
    ```bash
    cd MyApp
-   netcorepal-codeanalysis generate \
-       -p MyApp/MyApp.csproj \
-       -p MyApp.Domain/MyApp.Domain.csproj \
-       -c Release \
-       -o docs/architecture.html
+      netcorepal-codeanalysis generate \
+         -p MyApp/MyApp.csproj \
+         -p MyApp.Domain/MyApp.Domain.csproj \
+         -o docs/architecture.html
    ```
 
-4. **直接分析程序集：**
-
-   ```bash
-   cd MyApp
-   netcorepal-codeanalysis generate \
-       -a bin/Debug/net8.0/MyApp.dll \
-       -a bin/Debug/net8.0/MyApp.Domain.dll \
-       --verbose
-   ```
+   
 
 ## 自动发现机制
 
-工具按以下优先级自动发现项目内容：
+当未提供 `--solution` 与 `--project` 时，工具会在“当前目录（顶层）”自动发现分析目标：
 
-1. **解决方案文件**：查找 `*.sln` 文件
-2. **项目文件**：查找 `*.csproj` 文件  
-3. **程序集文件**：查找 `bin/` 目录下的 `*.dll` 文件
+- 优先级：`.slnx` > `.sln` > 顶层 `*.csproj`
+- 非递归扫描目录：仅加载当前目录顶层的解决方案/项目文件，随后递归分析其依赖项目
+- 默认排除测试项目：除非显式传入 `--include-tests`
+- 输出可见性：
+   - 选择 `.slnx/.sln` 会打印 `Using solution (...): <文件名>`；随后打印“Projects to analyze (N)”并列出递归依赖在内的完整项目清单
+   - 选择顶层 `*.csproj` 会直接打印“Projects to analyze (N)”并列出包含递归依赖的完整清单
 
-发现规则：
+> 说明：工具会在隔离的临时工作目录中生成并执行动态 `app.cs`，并使用 `--no-launch-profile` 运行以避免继承当前目录的 `launchSettings.json`/`global.json` 等环境影响。
 
-- 在当前目录及子目录中递归搜索
-- 解决方案优先于项目，项目优先于程序集
-- 自动排除测试项目（包含 "Test"、"Tests" 的项目）
-- 自动构建项目并加载生成的程序集
+### 测试项目识别规则
+
+- 默认行为：测试项目会被排除在分析之外（除非显式传入 `--include-tests`）
+- 判定规则（满足任一即视为测试项目）：
+   - 项目文件所在路径的任一父级目录名为 `test` 或 `tests`（不区分大小写）
+   - 项目文件（.csproj）中包含 `<IsTestProject>true</IsTestProject>`（大小写与空白不敏感）
 
 ## 系统要求
 
-- .NET 8.0 或更高版本
-- 程序集必须包含由 `NetCorePal.Extensions.CodeAnalysis` 源生成器生成的代码分析结果
+- 运行环境：.NET 10 SDK（单文件执行依赖 .NET 10 特性）
+- 被分析项目的目标框架：支持 `net8.0`、`net9.0` 和 `net10.0`
+- 被分析项目必须引用 `NetCorePal.Extensions.CodeAnalysis` 包（包含源生成器）
 
 ## 输出内容
 
@@ -152,8 +161,8 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
 
 ```xml
 <Target Name="GenerateArchitectureVisualization" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
-  <Exec Command="netcorepal-codeanalysis generate -a $(OutputPath)$(AssemblyName).dll -o $(OutputPath)architecture.html" 
-        ContinueOnError="true" />
+   <Exec Command="netcorepal-codeanalysis generate --project $(MSBuildProjectFullPath) --output $(OutputPath)architecture-visualization.html" 
+            ContinueOnError="true" />
 </Target>
 ```
 
@@ -166,17 +175,17 @@ netcorepal-codeanalysis generate --assembly MyApp.dll
   run: |
     dotnet tool install -g NetCorePal.Extensions.CodeAnalysis.Tools
     cd MyApp
-    netcorepal-codeanalysis generate \
-      --output docs/architecture.html \
-      --title "MyApp 架构图"
+      netcorepal-codeanalysis generate \
+         --output docs/architecture-visualization.html \
+         --title "MyApp 架构图"
 ```
 
 ## 故障排除
 
 ### 常见问题
 
-1. **找不到程序集**：确保程序集文件存在且可访问
-2. **无分析结果**：确保程序集使用了 `NetCorePal.Extensions.CodeAnalysis` 包引用进行构建
+1. **找不到项目/解决方案**：确保路径正确且文件存在
+2. **无分析结果**：确保项目引用了 `NetCorePal.Extensions.CodeAnalysis` 包并能正常编译
 3. **权限错误**：检查输出目录的写入权限
 4. **构建失败**：确保项目可以正常构建，检查依赖项
 
@@ -191,8 +200,8 @@ netcorepal-codeanalysis generate --verbose
 这将显示：
 
 - 发现的文件和项目
-- 构建过程信息
-- 加载的程序集
+- 递归依赖收集信息
+- 单文件执行过程日志
 - 分析统计信息
 - 文件生成详情
 - 发生问题时的错误详情
