@@ -32,15 +32,16 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <FrameworkVersion>10.0.0</FrameworkVersion>
     <ExtensionsVersion>10.0.0</ExtensionsVersion>
-    <EntityFrameworkVersion>9.0.0</EntityFrameworkVersion>
-    <NpgsqlEntityFrameworkCorePostgreSQLVersion>9.0.0</NpgsqlEntityFrameworkCorePostgreSQLVersion>
+    <EntityFrameworkVersion>10.0.10</EntityFrameworkVersion>
+    <NpgsqlEntityFrameworkCorePostgreSQLVersion>10.0.3</NpgsqlEntityFrameworkCorePostgreSQLVersion>
     <PomeloVersion>9.0.0</PomeloVersion>
+    <MicrotingVersion>10.0.9</MicrotingVersion>
     <ShardingCoreVersion>7.9.1.24</ShardingCoreVersion>
     <CapVersion>8.4.1</CapVersion>
-    <GaussDBEntityFrameworkCoreVersion>9.0.0</GaussDBEntityFrameworkCoreVersion>
-    <KingbaseESEntityFrameworkCoreVersion>9.0.0</KingbaseESEntityFrameworkCoreVersion>
+    <GaussDBEntityFrameworkCoreVersion>10.0.0</GaussDBEntityFrameworkCoreVersion>
+    <KingbaseESEntityFrameworkCoreVersion>10.0.0</KingbaseESEntityFrameworkCoreVersion>
     <DMDBEntityFrameworkCoreVersion>9.0.0.37033</DMDBEntityFrameworkCoreVersion>
-    <MongoDBEntityFrameworkCoreVersion>9.0.3</MongoDBEntityFrameworkCoreVersion>
+    <MongoDBEntityFrameworkCoreVersion>10.0.2</MongoDBEntityFrameworkCoreVersion>
   </PropertyGroup>
   <PropertyGroup>
     <NetCorePalTestcontainerVersion>1.0.1</NetCorePalTestcontainerVersion>
@@ -90,6 +91,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(EntityFrameworkVersion)" PrivateAssets="All" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(NpgsqlEntityFrameworkCorePostgreSQLVersion)" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="$(PomeloVersion)" />
+    <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="$(MicrotingVersion)" Condition="'$(MicrotingVersion)' != ''" />
     <PackageVersion Include="DotNetCore.EntityFrameworkCore.GaussDB" Version="$(GaussDBEntityFrameworkCoreVersion)" />
     <PackageVersion Include="DotNetCore.EntityFrameworkCore.KingbaseES" Version="$(KingbaseESEntityFrameworkCoreVersion)" />
     <PackageVersion Include="DM.Microsoft.EntityFrameworkCore" Version="$(DMDBEntityFrameworkCoreVersion)" />
