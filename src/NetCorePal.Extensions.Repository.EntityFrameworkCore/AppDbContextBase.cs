@@ -148,8 +148,9 @@ public abstract class AppDbContextBase : DbContext, ITransactionUnitOfWork
     {
         if (CurrentTransaction != null)
         {
-            await CurrentTransaction.CommitAsync(cancellationToken);
+            var transaction = CurrentTransaction;
             CurrentTransaction = null;
+            await transaction.CommitAsync(cancellationToken);
         }
     }
 
