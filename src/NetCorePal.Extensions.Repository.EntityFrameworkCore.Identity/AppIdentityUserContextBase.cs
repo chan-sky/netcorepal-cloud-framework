@@ -117,10 +117,9 @@ public abstract class AppIdentityUserContextBase<
     {
         if (CurrentTransaction != null)
         {
-            var transaction = CurrentTransaction;
+            await CurrentTransaction.CommitAsync(cancellationToken);
+            WriteTransactionCommit(new TransactionCommit(CurrentTransaction.TransactionId));
             CurrentTransaction = null;
-            await transaction.CommitAsync(cancellationToken);
-            WriteTransactionCommit(new TransactionCommit(transaction.TransactionId));
         }
     }
 

@@ -119,9 +119,8 @@ public abstract class AppIdentityDbContextBase<TUser, TRole, TKey, TUserClaim, T
     {
         if (CurrentTransaction != null)
         {
-            var transaction = CurrentTransaction;
+            await CurrentTransaction.CommitAsync(cancellationToken);
             CurrentTransaction = null;
-            await transaction.CommitAsync(cancellationToken);
         }
     }
 
